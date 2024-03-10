@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"greenlight/internal/data"
 	"greenlight/internal/jsonlog"
+	"greenlight/internal/mailer"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -32,6 +34,13 @@ type config struct {
 		burst   int
 		enabled bool
 	}
+	smtp struct {
+		host     string
+		port     int
+		username string
+		password string
+		sender   string
+	}
 }
 
 // application struct holds the dependencies for our HTTP handlers, helpers, and middleware.
@@ -39,6 +48,8 @@ type application struct {
 	config config
 	logger *jsonlog.Logger
 	models data.Models
+	mailer mailer.Mailer
+	wg     sync.WaitGroup
 }
 
 func main() {
@@ -73,7 +84,7 @@ func main() {
 	if err != nil {
 		logger.PrintFatal(fmt.Errorf("invalid POSTGRESQL_MAX_OPEN_CONNS %s", err), nil)
 	}
-	flag.IntVar(&cfg.db.maxOpenConns, "POSTGRESQL_MAX_OPEN_CONNS",  postgresMaxOpenConns, "PostgreSQL max open connections")
+	flag.IntVar(&cfg.db.maxOpenConns, "POSTGRESQL_MAX_OPEN_CONNS", postgresMaxOpenConns, "PostgreSQL max open connections")
 
 	postgresMaxIdleConns, err := strconv.Atoi(os.Getenv("POSTGRESQL_MAX_IDLE_CONNS"))
 	if err != nil {
@@ -90,7 +101,7 @@ func main() {
 	limiterRps, err := strconv.ParseFloat(os.Getenv("LIMITER_RPS"), 64)
 	if err != nil {
 		logger.PrintFatal(fmt.Errorf("invalid LIMITER_RPS %s", err), nil)
-	} 
+	}
 	flag.Float64Var(&cfg.limiter.rps, "LIMITER_RPS", limiterRps, "Rate limiter maximum requests per second")
 
 	limiterBurst, err := strconv.Atoi(os.Getenv("LIMITER_BURST"))
@@ -104,6 +115,36 @@ func main() {
 		logger.PrintFatal(fmt.Errorf("invalid LIMITER_ENABLED %s", err), nil)
 	}
 	flag.BoolVar(&cfg.limiter.enabled, "LIMITER_ENABLED", limiterEnabled, "Enable rate limiter")
+
+	smtpHost := os.Getenv("SMTP_HOST")
+	if smtpHost == "" {
+		logger.PrintFatal(fmt.Errorf("SMTP_HOST is not set"), nil)
+	}
+	flag.StringVar(&cfg.smtp.host, "SMTP_HOST", smtpHost, "SMTP server host")
+
+	smtpPort, err := strconv.Atoi(os.Getenv("SMTP_PORT"))
+	if err != nil {
+		logger.PrintFatal(fmt.Errorf("invalid SMTP_PORT %s", err), nil)
+	}
+	flag.IntVar(&cfg.smtp.port, "SMTP_PORT", smtpPort, "SMTP server port")
+
+	smtpUsername := os.Getenv("SMTP_USERNAME")
+	if smtpUsername == "" {
+		logger.PrintFatal(fmt.Errorf("SMTP_USERNAME is not set"), nil)
+	}
+	flag.StringVar(&cfg.smtp.username, "SMTP_USERNAME", smtpUsername, "SMTP server username")
+
+	smtpPassword := os.Getenv("SMTP_PASSWORD")
+	if smtpPassword == "" {
+		logger.PrintFatal(fmt.Errorf("SMTP_PASSWORD is not set"), nil)
+	}
+	flag.StringVar(&cfg.smtp.password, "SMTP_PASSWORD", smtpPassword, "SMTP server password")
+
+	smtpSender := os.Getenv("SMTP_SENDER")
+	if smtpSender == "" {
+		logger.PrintFatal(fmt.Errorf("SMTP_SENDER is not set"), nil)
+	}
+	flag.StringVar(&cfg.smtp.sender, "SMTP_SENDER", smtpSender, "SMTP sender")
 
 	flag.Parse()
 
@@ -119,6 +160,7 @@ func main() {
 		config: cfg,
 		logger: logger,
 		models: data.NewModels(db),
+		mailer: mailer.New(cfg.smtp.host, cfg.smtp.port, cfg.smtp.username, cfg.smtp.password, cfg.smtp.sender),
 	}
 
 	err = app.serve()
