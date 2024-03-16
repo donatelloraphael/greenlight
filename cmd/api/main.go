@@ -9,6 +9,7 @@ import (
 	"greenlight/internal/data"
 	"greenlight/internal/jsonlog"
 	"greenlight/internal/mailer"
+	"greenlight/internal/vcs"
 	"os"
 	"runtime"
 	"strconv"
@@ -20,7 +21,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
-const version = "1.0.0"
+var version = vcs.Version()
 
 // config struct holds all the configuration settings for our application
 type config struct {
@@ -156,7 +157,14 @@ func main() {
 	flag.StringVar(&trustedOrigins, "CORS_TRUSTED_ORIGINS", trustedOrigins, "List of trusted CORS origins (space separated)")
 	cfg.cors.trustedOrigins = strings.Fields(trustedOrigins)
 
+	displayVersion := flag.Bool("version", false, "Display the version and exit")
+
 	flag.Parse()
+
+	if *displayVersion {
+		fmt.Printf("Version:\t%s\n", version)
+		os.Exit(0)
+	}
 
 	db, err := openDB(cfg)
 	if err != nil {
