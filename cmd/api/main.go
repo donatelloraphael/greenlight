@@ -10,6 +10,7 @@ import (
 	"greenlight/internal/mailer"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -40,6 +41,9 @@ type config struct {
 		username string
 		password string
 		sender   string
+	}
+	cors struct {
+		trustedOrigins []string
 	}
 }
 
@@ -145,6 +149,10 @@ func main() {
 		logger.PrintFatal(fmt.Errorf("SMTP_SENDER is not set"), nil)
 	}
 	flag.StringVar(&cfg.smtp.sender, "SMTP_SENDER", smtpSender, "SMTP sender")
+
+	trustedOrigins := os.Getenv("CORS_TRUSTED_ORIGINS")
+	flag.StringVar(&trustedOrigins, "CORS_TRUSTED_ORIGINS", trustedOrigins, "List of trusted CORS origins (space separated)")
+	cfg.cors.trustedOrigins = strings.Fields(trustedOrigins)
 
 	flag.Parse()
 
