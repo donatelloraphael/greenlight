@@ -119,7 +119,7 @@ func (app *application) createAuthenticationTokenHandler(w http.ResponseWriter, 
 		return
 	}
 
-	err = app.writeJSON(w, http.StatusCreated, envelope{"authenticaton_toke": token}, nil)
+	err = app.writeJSON(w, http.StatusCreated, envelope{"authenticaton_token": token}, nil)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
